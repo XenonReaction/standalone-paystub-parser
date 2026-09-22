@@ -8,8 +8,6 @@ import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
 
-const EMPLOYER_MILEAGE_RATE = 0.45; // this employer's actual per-mile reimbursement rate, as printed on the paystub
-
 // ---------------------------------------------------------------------------
 // PDF -> layout-preserving text (mirrors ../src/pdf.ts / ../frontend's
 // pdf-text-extractor.service.ts - same column-reconstruction approach).
@@ -270,27 +268,38 @@ function totalHoursWorked(stub) {
  * - $/hour, reimbursements removed: strip out the *entire* net effect of
  *   other_deductions (mileage, GPS/data, the tips-reported wash) from net
  *   pay first, i.e. what's left is just labor pay after taxes.
- * - $/hour, mileage at federal rate: that same reimbursements-removed base,
- *   with mileage specifically added back - recalculated as (mileage $ ÷
- *   employer's $/mi) x federal $/mi, instead of the employer's own rate.
+ * - $/hour, mileage at federal rate: earnings for the period minus taxes
+ *   (i.e. pay before any of the other_deductions line items are applied),
+ *   with mileage added back in - recalculated as (mileage $ ÷ actual $/mi)
+ *   x federal $/mi, instead of the actual reimbursement rate.
  *
  * Returns null if there's no hours to divide by, no net pay, or no line
  * item matching "mileage" to back out miles from.
  */
-function calculateRates(stub, federalMileageRate) {
+function calculateRates(stub, federalMileageRate, actualMileageRate) {
   const hours = totalHoursWorked(stub);
   const mileageLine = stub.other_deductions.find((d) => /mileage/i.test(d.name));
-  if (hours <= 0 || stub.net_pay === null || !mileageLine || mileageLine.current_amount === null) {
+  if (
+    hours <= 0 ||
+    stub.net_pay === null ||
+    !mileageLine ||
+    mileageLine.current_amount === null ||
+    !actualMileageRate ||
+    actualMileageRate <= 0
+  ) {
     return null;
   }
 
   const reimbursementNetEffect = -stub.other_deductions.reduce((sum, d) => sum + (d.current_amount ?? 0), 0);
-  const impliedMiles = -mileageLine.current_amount / EMPLOYER_MILEAGE_RATE;
+  const impliedMiles = -mileageLine.current_amount / actualMileageRate;
   const recalculatedMileage = impliedMiles * federalMileageRate;
+
+  const totalTaxes = stub.taxes.reduce((sum, t) => sum + (t.current_amount ?? 0), 0);
+  const earningsAfterTaxes = (stub.gross_pay ?? 0) - totalTaxes;
 
   const ratePaid = stub.net_pay / hours;
   const rateNoReimbursements = (stub.net_pay - reimbursementNetEffect) / hours;
-  const rateAdjusted = rateNoReimbursements + recalculatedMileage / hours;
+  const rateAdjusted = (earningsAfterTaxes + recalculatedMileage) / hours;
 
   return { hours, impliedMiles, recalculatedMileage, ratePaid, rateNoReimbursements, rateAdjusted };
 }
@@ -303,6 +312,7 @@ const fileInput = document.getElementById('pdf-input');
 const statusEl = document.getElementById('status');
 const resultsEl = document.getElementById('results');
 const federalRateInput = document.getElementById('federal-rate-input');
+const actualRateInput = document.getElementById('actual-rate-input');
 const parsedJsonEl = document.getElementById('parsed-json');
 
 let currentStub = null;
@@ -316,7 +326,8 @@ function render() {
     return;
   }
   const federalRate = parseFloat(federalRateInput.value) || 0;
-  const rates = calculateRates(currentStub, federalRate);
+  const actualRate = parseFloat(actualRateInput.value) || 0;
+  const rates = calculateRates(currentStub, federalRate, actualRate);
 
   document.getElementById('rate-paid').textContent = formatDollars(rates?.ratePaid ?? null);
   document.getElementById('rate-no-reimbursements').textContent = formatDollars(rates?.rateNoReimbursements ?? null);
@@ -324,7 +335,7 @@ function render() {
 
   const note = document.getElementById('rate-adjusted-note');
   if (rates) {
-    note.textContent = `${rates.impliedMiles.toFixed(0)} implied miles × $${federalRate.toFixed(2)}/mi = ${formatDollars(rates.recalculatedMileage)}, added to the reimbursements-removed base.`;
+    note.textContent = `${rates.impliedMiles.toFixed(0)} implied miles (mileage reimbursement ÷ $${actualRate.toFixed(2)}/mi actual rate) × $${federalRate.toFixed(2)}/mi federal rate = ${formatDollars(rates.recalculatedMileage)}, added to earnings after taxes.`;
   } else {
     note.textContent = 'No mileage reimbursement line found on this paystub, so this can’t be calculated.';
   }
@@ -334,6 +345,7 @@ function render() {
 }
 
 federalRateInput.addEventListener('input', render);
+actualRateInput.addEventListener('input', render);
 
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];

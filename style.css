@@ -85,6 +85,15 @@ h1 {
   font-size: 0.8rem;
 }
 
+.rate-card__inputs label {
+  display: block;
+  margin-top: 0.4rem;
+}
+
+.rate-card__inputs label:first-child {
+  margin-top: 0;
+}
+
 .rate-card__inputs input {
   width: 5rem;
   display: block;
