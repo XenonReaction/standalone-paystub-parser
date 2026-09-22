@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  line-height: 1.5;
+}
+
+h1 {
+  margin-bottom: 0.25rem;
+}
+
+.intro {
+  color: #6b7280;
+  margin-top: 0;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  border: 2px dashed #9ca3af;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+.dropzone:hover {
+  border-color: #4b5563;
+}
+
+.status {
+  min-height: 1.25rem;
+  color: #6b7280;
+}
+
+.status--error {
+  color: #b91c1c;
+}
+
+.results[hidden] {
+  display: none;
+}
+
+.rate-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.rate-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.rate-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.rate-card__value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.rate-card__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.rate-card__inputs {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+}
+
+.rate-card__inputs input {
+  width: 5rem;
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.disclaimer {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.parsed-json {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #111827;
+    color: #e5e7eb;
+  }
+
+  .rate-card,
+  .parsed-json {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .dropzone {
+    border-color: #4b5563;
+  }
+}
