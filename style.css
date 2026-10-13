@@ -319,6 +319,14 @@ h1 {
   display: none;
 }
 
+.current-stub-title {
+  margin: 1.5rem 0 0;
+}
+
+.results .rate-cards {
+  margin-top: 0.75rem;
+}
+
 .rate-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -383,10 +391,13 @@ h1 {
   font-style: italic;
 }
 
+/* Grid so an optional description sits under the heading, lined up past the arrow. */
 .collapsible summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 0.5rem;
+  column-gap: 0.5rem;
+  padding: 1rem 0;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -407,7 +418,14 @@ h1 {
 }
 
 .collapsible summary h2 {
-  margin: 1rem 0;
+  margin: 0;
+}
+
+.collapsible__description {
+  grid-column: 2;
+  margin-top: 0.1rem;
+  font-size: 0.85rem;
+  color: #6b7280;
 }
 
 .collapsible__empty {

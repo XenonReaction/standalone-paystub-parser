@@ -18,8 +18,8 @@
     <!-- Tabs only show and hide these sections; the page never reloads, so loaded paystubs stay in memory. -->
     <section id="page-home" class="page">
       <p class="intro">
-        A single-file, no-build-step version of this project's parser. Everything happens in this browser tab -
-        nothing is uploaded anywhere, and nothing is saved once you close or reload this page.
+        Turn your paystub PDFs into the hourly rates you're really earning. Everything happens in this browser
+        tab - nothing is uploaded anywhere, and nothing is saved once you close or reload this page.
       </p>
 
       <label class="dropzone" for="pdf-input">
@@ -30,6 +30,7 @@
       <p id="status" class="status" role="status"></p>
 
       <section id="results" class="results" hidden>
+        <h2 id="current-stub-title" class="current-stub-title"></h2>
         <section class="rate-cards">
           <article class="rate-card rate-card--apparent">
             <h2>Apparent $/hour</h2>
@@ -73,7 +74,10 @@
 
       <!-- Each section shows its "Upload a paystub" message until something is loaded. -->
       <details class="collapsible" open>
-        <summary><h2>Paystubs</h2></summary>
+        <summary>
+          <h2>Paystubs</h2>
+          <span class="collapsible__description">Every paystub you've loaded this session - click one to show its rates above.</span>
+        </summary>
         <p class="collapsible__empty" data-empty-message>Upload a paystub to see it listed here.</p>
         <nav aria-label="Loaded paystubs">
           <ul id="stub-list" class="stub-list"></ul>
@@ -81,7 +85,10 @@
       </details>
 
       <details class="collapsible">
-        <summary><h2>Calculations</h2></summary>
+        <summary>
+          <h2>Calculations</h2>
+          <span class="collapsible__description">The numbers taken from the selected paystub and each step of the math behind its three rates.</span>
+        </summary>
         <p class="collapsible__empty" data-empty-message>Upload a paystub to see its calculations.</p>
         <table class="calculation-table" data-needs-paystub hidden>
           <tbody id="calculation-body"></tbody>
@@ -89,13 +96,19 @@
       </details>
 
       <details class="collapsible">
-        <summary><h2>Parsed paystub</h2></summary>
+        <summary>
+          <h2>Parsed paystub</h2>
+          <span class="collapsible__description">Everything read from the selected paystub's PDF, exactly as the parser understood it.</span>
+        </summary>
         <p class="collapsible__empty" data-empty-message>Upload a paystub to see what was read from it.</p>
         <pre id="parsed-json" class="parsed-json" data-needs-paystub hidden></pre>
       </details>
 
       <details class="collapsible" open>
-        <summary><h2>Lifetime Rates</h2></summary>
+        <summary>
+          <h2>Lifetime Rates</h2>
+          <span class="collapsible__description">All loaded paystubs combined - total pay divided by total hours, so longer pay periods count for more.</span>
+        </summary>
         <p class="collapsible__empty" data-empty-message>Upload a paystub to see Lifetime Rates information</p>
         <section class="overall" data-needs-paystub hidden>
           <p id="overall-summary" class="overall__summary"></p>

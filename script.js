@@ -385,11 +385,19 @@ function renderCalculationTable(inputs, outputs) {
   );
 }
 
+const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "2026-08-03" -> "03-Aug-26", for dates shown on the page (the parsed data keeps ISO dates). */
+function displayDate(iso) {
+  const [year, month, day] = iso.split('-');
+  return `${day}-${MONTH_ABBREVIATIONS[parseInt(month, 10) - 1]}-${year.slice(-2)}`;
+}
+
 function stubLabel(stub) {
   if (stub.period_begin && stub.period_end) {
-    return `${stub.period_begin} – ${stub.period_end}`;
+    return `${displayDate(stub.period_begin)} – ${displayDate(stub.period_end)}`;
   }
-  return stub.voucher_date ?? 'Unknown period';
+  return stub.voucher_date ? displayDate(stub.voucher_date) : 'Unknown period';
 }
 
 function renderStubList() {
@@ -446,7 +454,7 @@ function renderGraphs(federalRate) {
       return {
         sortKey: stub.period_begin,
         label: stubLabel(stub),
-        shortLabel: stub.period_end,
+        shortLabel: displayDate(stub.period_end),
         apparent: outputs.apparent_pay_rate,
         actual: outputs.hourly_rate,
         adjusted: outputs.adjusted_hourly_rate,
@@ -465,6 +473,7 @@ function render() {
   const federalRate = parseFloat(federalRateInput.value) || 0;
   const { inputs, outputs, unrecognized } = calculateStubPay(currentStub, federalRate);
 
+  document.getElementById('current-stub-title').textContent = `Paystub: ${stubLabel(currentStub)}`;
   document.getElementById('rate-apparent').textContent = formatDollars(outputs.apparent_pay_rate);
   document.getElementById('rate-hourly').textContent = formatDollars(outputs.hourly_rate);
   document.getElementById('rate-adjusted').textContent = formatDollars(outputs.adjusted_hourly_rate);
@@ -538,7 +547,7 @@ async function loadStub(file) {
   const existing = loadedStubs.find((entry) => entry.stub.paystub_hash === stub.paystub_hash);
   if (existing) {
     throw new Error(
-      `This paystub (voucher ${stub.voucher_number}, ${stub.voucher_date}) is already loaded as ${existing.fileName}.`,
+      `This paystub (voucher ${stub.voucher_number}, ${displayDate(stub.voucher_date)}) is already loaded as ${existing.fileName}.`,
     );
   }
 
