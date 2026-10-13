@@ -60,3 +60,37 @@ export function calculatePay(inputs) {
   }
   return { inputs: v, outputs };
 }
+
+// Lifetime formulas across several paystubs. Each paystub's pay is summed and
+// divided by the summed hours, so a long pay period counts for more than a
+// short one (rather than averaging each paystub's hourly rate).
+// "actual" pay is total_pay: pay after federal taxes, reimbursement left out.
+export const overallFormulas = {
+  overall_apparent_pay: (stubs) => sumOf(stubs, 'apparent_pay'),
+  overall_actual_pay: (stubs) => sumOf(stubs, 'total_pay'),
+  overall_adjusted_pay: (stubs) => sumOf(stubs, 'adjusted_pay'),
+  overall_total_hours: (stubs) => sumOf(stubs, 'total_hours'),
+};
+
+export const overallRateFormulas = {
+  overall_apparent_hourly_rate: (v) => v.overall_apparent_pay / v.overall_total_hours,
+  overall_actual_hourly_rate: (v) => v.overall_actual_pay / v.overall_total_hours,
+  overall_adjusted_hourly_rate: (v) => v.overall_adjusted_pay / v.overall_total_hours,
+};
+
+function sumOf(stubs, name) {
+  return stubs.reduce((sum, v) => sum + v[name], 0);
+}
+
+// Takes the full-precision `inputs` (which also hold every output) that
+// calculatePay returned for each paystub; rounds only the final results.
+export function calculateOverallPay(stubValues) {
+  const v = {};
+  for (const [name, formula] of Object.entries(overallFormulas)) {
+    v[name] = formula(stubValues);
+  }
+  for (const [name, formula] of Object.entries(overallRateFormulas)) {
+    v[name] = formula(v);
+  }
+  return Object.fromEntries(Object.entries(v).map(([name, value]) => [name, round2(value)]));
+}

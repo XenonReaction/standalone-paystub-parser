@@ -6,7 +6,7 @@
 // for the pdf.js library code itself, not for anything in the file you pick.
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs';
 
-import { DEFAULT_RATES, UNITS, calculatePay } from './pay_formulas.js';
+import { DEFAULT_RATES, UNITS, calculateOverallPay, calculatePay } from './pay_formulas.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
 
@@ -331,6 +331,8 @@ const calculationBodyEl = document.getElementById('calculation-body');
 const fileInputLabel = document.getElementById('pdf-input-label');
 const stubListSection = document.getElementById('stub-list-section');
 const stubListEl = document.getElementById('stub-list');
+const overallToggle = document.getElementById('overall-toggle');
+const overallEl = document.getElementById('overall');
 
 // Every paystub parsed this session, in load order, and the one on display.
 const loadedStubs = [];
@@ -415,14 +417,35 @@ function renderStubList() {
   );
 }
 
+function calculateStubPay(stub, federalRate) {
+  const { inputs: stubInputs, unrecognized } = paystubToPayInputs(stub);
+  return { ...calculatePay({ ...stubInputs, federal_rate_per_mile: federalRate }), unrecognized };
+}
+
+function renderOverall(federalRate) {
+  if (overallEl.hidden || loadedStubs.length === 0) {
+    return;
+  }
+  const overall = calculateOverallPay(loadedStubs.map(({ stub }) => calculateStubPay(stub, federalRate).inputs));
+  document.getElementById('overall-apparent').textContent = formatDollars(overall.overall_apparent_hourly_rate);
+  document.getElementById('overall-actual').textContent = formatDollars(overall.overall_actual_hourly_rate);
+  document.getElementById('overall-adjusted').textContent = formatDollars(overall.overall_adjusted_hourly_rate);
+  const count = loadedStubs.length;
+  document.getElementById('overall-summary').textContent =
+    `${count} paystub${count === 1 ? '' : 's'}, ${overall.overall_total_hours.toFixed(2)} hours: ` +
+    `${formatDollars(overall.overall_apparent_pay)} apparent, ` +
+    `${formatDollars(overall.overall_actual_pay)} actual, ` +
+    `${formatDollars(overall.overall_adjusted_pay)} adjusted pay.`;
+}
+
 function render() {
   renderStubList();
+  renderOverall(parseFloat(federalRateInput.value) || 0);
   if (!currentStub) {
     return;
   }
   const federalRate = parseFloat(federalRateInput.value) || 0;
-  const { inputs: stubInputs, unrecognized } = paystubToPayInputs(currentStub);
-  const { inputs, outputs } = calculatePay({ ...stubInputs, federal_rate_per_mile: federalRate });
+  const { inputs, outputs, unrecognized } = calculateStubPay(currentStub, federalRate);
 
   document.getElementById('rate-apparent').textContent = formatDollars(outputs.apparent_pay_rate);
   document.getElementById('rate-hourly').textContent = formatDollars(outputs.hourly_rate);
@@ -444,6 +467,13 @@ function render() {
 }
 
 federalRateInput.addEventListener('input', render);
+
+overallToggle.addEventListener('click', () => {
+  overallEl.hidden = !overallEl.hidden;
+  overallToggle.setAttribute('aria-expanded', String(!overallEl.hidden));
+  overallToggle.textContent = overallEl.hidden ? 'Show combined rates' : 'Hide combined rates';
+  render();
+});
 
 // Fields a paystub must have for the parser's numbers (and its hash) to mean anything.
 const REQUIRED_FIELDS = ['voucher_date', 'voucher_number', 'period_begin', 'period_end', 'net_pay'];

@@ -93,6 +93,36 @@ h1 {
   color: #6b7280;
 }
 
+.overall-toggle {
+  font: inherit;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #2563eb;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.overall-toggle:hover {
+  background: #1d4ed8;
+}
+
+.overall[hidden] {
+  display: none;
+}
+
+.overall .rate-cards {
+  margin: 0.75rem 0 0;
+}
+
+.overall__summary {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
 .results[hidden] {
   display: none;
 }

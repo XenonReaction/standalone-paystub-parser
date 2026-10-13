@@ -24,6 +24,26 @@
     <nav id="stub-list-section" class="stub-list-section" aria-label="Loaded paystubs" hidden>
       <h2>Loaded paystubs</h2>
       <ul id="stub-list" class="stub-list"></ul>
+      <button id="overall-toggle" class="overall-toggle" type="button" aria-expanded="false" aria-controls="overall">
+        Show combined rates
+      </button>
+      <section id="overall" class="overall" hidden>
+        <p id="overall-summary" class="overall__summary"></p>
+        <div class="rate-cards">
+          <article class="rate-card">
+            <h2>Combined $/hour apparent</h2>
+            <p class="rate-card__value" id="overall-apparent">&mdash;</p>
+          </article>
+          <article class="rate-card">
+            <h2>Combined $/hour actual</h2>
+            <p class="rate-card__value" id="overall-actual">&mdash;</p>
+          </article>
+          <article class="rate-card">
+            <h2>Combined $/hour adjusted</h2>
+            <p class="rate-card__value" id="overall-adjusted">&mdash;</p>
+          </article>
+        </div>
+      </section>
     </nav>
 
     <section id="results" class="results" hidden>
