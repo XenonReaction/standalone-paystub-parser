@@ -7,6 +7,7 @@
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs';
 
 import { DEFAULT_RATES, UNITS, calculateOverallPay, calculatePay } from './pay_formulas.js';
+import { updateRateChart } from './graphs.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
 
@@ -314,6 +315,7 @@ function paystubToPayInputs(stub) {
     driver_hours: sumHours(driver),
     // Reimbursements are printed as negative deductions.
     car_reimbursement: -sumAmounts(stub.other_deductions.filter((d) => /mileage/i.test(d.name))),
+    gps_reimbursement: -sumAmounts(stub.other_deductions.filter((d) => /gps/i.test(d.name))),
   };
   return { inputs, unrecognized };
 }
@@ -329,10 +331,7 @@ const federalRateInput = document.getElementById('federal-rate-input');
 const parsedJsonEl = document.getElementById('parsed-json');
 const calculationBodyEl = document.getElementById('calculation-body');
 const fileInputLabel = document.getElementById('pdf-input-label');
-const stubListSection = document.getElementById('stub-list-section');
 const stubListEl = document.getElementById('stub-list');
-const overallToggle = document.getElementById('overall-toggle');
-const overallEl = document.getElementById('overall');
 
 // Every paystub parsed this session, in load order, and the one on display.
 const loadedStubs = [];
@@ -394,7 +393,9 @@ function stubLabel(stub) {
 }
 
 function renderStubList() {
-  stubListSection.hidden = loadedStubs.length === 0;
+  const hasStubs = loadedStubs.length > 0;
+  document.querySelectorAll('[data-empty-message]').forEach((el) => (el.hidden = hasStubs));
+  document.querySelectorAll('[data-needs-paystub]').forEach((el) => (el.hidden = !hasStubs));
   fileInputLabel.textContent = loadedStubs.length === 0 ? 'Choose a paystub PDF' : 'Load a new paystub';
   stubListEl.replaceChildren(
     ...loadedStubs.map(({ stub, fileName }) => {
@@ -423,7 +424,7 @@ function calculateStubPay(stub, federalRate) {
 }
 
 function renderOverall(federalRate) {
-  if (overallEl.hidden || loadedStubs.length === 0) {
+  if (loadedStubs.length === 0) {
     return;
   }
   const overall = calculateOverallPay(loadedStubs.map(({ stub }) => calculateStubPay(stub, federalRate).inputs));
@@ -438,9 +439,26 @@ function renderOverall(federalRate) {
     `${formatDollars(overall.overall_adjusted_pay)} adjusted pay.`;
 }
 
+function renderGraphs(federalRate) {
+  updateRateChart(
+    loadedStubs.map(({ stub }) => {
+      const { outputs } = calculateStubPay(stub, federalRate);
+      return {
+        sortKey: stub.period_begin,
+        label: stubLabel(stub),
+        shortLabel: stub.period_end,
+        apparent: outputs.apparent_pay_rate,
+        actual: outputs.hourly_rate,
+        adjusted: outputs.adjusted_hourly_rate,
+      };
+    }),
+  );
+}
+
 function render() {
   renderStubList();
   renderOverall(parseFloat(federalRateInput.value) || 0);
+  renderGraphs(parseFloat(federalRateInput.value) || 0);
   if (!currentStub) {
     return;
   }
@@ -454,7 +472,7 @@ function render() {
   document.getElementById('rate-adjusted-note').textContent =
     `${outputs.miles_driven.toFixed(0)} miles × $${federalRate.toFixed(2)}/mi = ` +
     `${formatDollars(outputs.federal_suggested_reimbursement)} in car costs, minus ` +
-    `${formatDollars(inputs.car_reimbursement)} reimbursed = ` +
+    `${formatDollars(inputs.car_reimbursement)} mileage reimbursed = ` +
     `${formatDollars(outputs.missing_reimbursement)} taken out of pay.`;
 
   const warning = document.getElementById('unrecognized-warning');
@@ -467,13 +485,6 @@ function render() {
 }
 
 federalRateInput.addEventListener('input', render);
-
-overallToggle.addEventListener('click', () => {
-  overallEl.hidden = !overallEl.hidden;
-  overallToggle.setAttribute('aria-expanded', String(!overallEl.hidden));
-  overallToggle.textContent = overallEl.hidden ? 'Show combined rates' : 'Hide combined rates';
-  render();
-});
 
 // Fields a paystub must have for the parser's numbers (and its hash) to mean anything.
 const REQUIRED_FIELDS = ['voucher_date', 'voucher_number', 'period_begin', 'period_end', 'net_pay'];

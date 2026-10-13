@@ -9,98 +9,222 @@
 <body>
   <main>
     <h1>Paystub Parser</h1>
-    <p class="intro">
-      A single-file, no-build-step version of this project's parser. Everything happens in this browser tab -
-      nothing is uploaded anywhere, and nothing is saved once you close or reload this page.
-    </p>
-
-    <label class="dropzone" for="pdf-input">
-      <span id="pdf-input-label">Choose a paystub PDF</span>
-      <input id="pdf-input" type="file" accept="application/pdf" multiple />
-    </label>
-
-    <p id="status" class="status" role="status"></p>
-
-    <nav id="stub-list-section" class="stub-list-section" aria-label="Loaded paystubs" hidden>
-      <h2>Loaded paystubs</h2>
-      <ul id="stub-list" class="stub-list"></ul>
-      <button id="overall-toggle" class="overall-toggle" type="button" aria-expanded="false" aria-controls="overall">
-        Show combined rates
-      </button>
-      <section id="overall" class="overall" hidden>
-        <p id="overall-summary" class="overall__summary"></p>
-        <div class="rate-cards">
-          <article class="rate-card">
-            <h2>Combined $/hour apparent</h2>
-            <p class="rate-card__value" id="overall-apparent">&mdash;</p>
-          </article>
-          <article class="rate-card">
-            <h2>Combined $/hour actual</h2>
-            <p class="rate-card__value" id="overall-actual">&mdash;</p>
-          </article>
-          <article class="rate-card">
-            <h2>Combined $/hour adjusted</h2>
-            <p class="rate-card__value" id="overall-adjusted">&mdash;</p>
-          </article>
-        </div>
-      </section>
+    <nav class="tabs" aria-label="Pages">
+      <a class="tabs__tab" href="#home" data-page="home">Home</a>
+      <a class="tabs__tab" href="#graphs" data-page="graphs">Graphs</a>
+      <a class="tabs__tab" href="#about" data-page="about">About</a>
     </nav>
 
-    <section id="results" class="results" hidden>
-      <section class="rate-cards">
-        <article class="rate-card">
-          <h2>$/hour apparent</h2>
-          <p class="rate-card__value" id="rate-apparent">&mdash;</p>
-          <p class="rate-card__note">
-            Pay after federal taxes, plus the car reimbursement, &divide; hours worked - what the paycheck looks
-            like per hour.
-          </p>
-        </article>
-
-        <article class="rate-card">
-          <h2>$/hour paid</h2>
-          <p class="rate-card__value" id="rate-hourly">&mdash;</p>
-          <p class="rate-card__note">
-            Pay after federal taxes &divide; hours worked, with the car reimbursement left out.
-          </p>
-        </article>
-
-        <article class="rate-card">
-          <h2>$/hour after car costs</h2>
-          <p class="rate-card__value" id="rate-adjusted">&mdash;</p>
-          <div class="rate-card__inputs">
-            <label>
-              Federal rate ($/mi)
-              <input id="federal-rate-input" type="number" step="0.01" min="0" />
-            </label>
-          </div>
-          <p class="rate-card__note" id="rate-adjusted-note">
-            $/hour paid, minus the car costs the reimbursement didn't cover at the federal rate above.
-          </p>
-        </article>
-      </section>
-
-      <p id="unrecognized-warning" class="status status--error" hidden></p>
-
-      <p class="disclaimer">
-        These are this page's own estimates, not payroll or IRS figures. The federal mileage rate is a stand-in
-        for typical vehicle costs, not this vehicle's actual cost.
+    <!-- Tabs only show and hide these sections; the page never reloads, so loaded paystubs stay in memory. -->
+    <section id="page-home" class="page">
+      <p class="intro">
+        A single-file, no-build-step version of this project's parser. Everything happens in this browser tab -
+        nothing is uploaded anywhere, and nothing is saved once you close or reload this page.
       </p>
 
+      <label class="dropzone" for="pdf-input">
+        <span id="pdf-input-label">Choose a paystub PDF</span>
+        <input id="pdf-input" type="file" accept="application/pdf" multiple />
+      </label>
+
+      <p id="status" class="status" role="status"></p>
+
+      <section id="results" class="results" hidden>
+        <section class="rate-cards">
+          <article class="rate-card rate-card--apparent">
+            <h2>Apparent $/hour</h2>
+            <p class="rate-card__value" id="rate-apparent">&mdash;</p>
+            <p class="rate-card__note">
+              Pay after federal taxes, plus the mileage and GPS reimbursements, &divide; hours worked - what the
+              paycheck looks like per hour.
+            </p>
+          </article>
+
+          <article class="rate-card rate-card--actual">
+            <h2>Actual $/hour</h2>
+            <p class="rate-card__value" id="rate-hourly">&mdash;</p>
+            <p class="rate-card__note">
+              Pay after federal taxes &divide; hours worked, with the mileage and GPS reimbursements left out.
+            </p>
+          </article>
+
+          <article class="rate-card rate-card--adjusted">
+            <h2>Adjusted $/hour</h2>
+            <p class="rate-card__value" id="rate-adjusted">&mdash;</p>
+            <div class="rate-card__inputs">
+              <label>
+                Federal rate ($/mi)
+                <input id="federal-rate-input" type="number" step="0.01" min="0" />
+              </label>
+            </div>
+            <p class="rate-card__note" id="rate-adjusted-note">
+              Actual $/hour, minus the car costs the mileage reimbursement didn't cover at the federal rate above.
+            </p>
+          </article>
+        </section>
+
+        <p id="unrecognized-warning" class="status status--error" hidden></p>
+
+        <p class="disclaimer">
+          These are this page's own estimates, not payroll or IRS figures. The federal mileage rate is a stand-in
+          for typical vehicle costs, not this vehicle's actual cost.
+        </p>
+      </section>
+
+      <!-- Each section shows its "Upload a paystub" message until something is loaded. -->
+      <details class="collapsible" open>
+        <summary><h2>Paystubs</h2></summary>
+        <p class="collapsible__empty" data-empty-message>Upload a paystub to see it listed here.</p>
+        <nav aria-label="Loaded paystubs">
+          <ul id="stub-list" class="stub-list"></ul>
+        </nav>
+      </details>
+
       <details class="collapsible">
-        <summary><h2>Calculation</h2></summary>
-        <table class="calculation-table">
+        <summary><h2>Calculations</h2></summary>
+        <p class="collapsible__empty" data-empty-message>Upload a paystub to see its calculations.</p>
+        <table class="calculation-table" data-needs-paystub hidden>
           <tbody id="calculation-body"></tbody>
         </table>
       </details>
 
       <details class="collapsible">
         <summary><h2>Parsed paystub</h2></summary>
-        <pre id="parsed-json" class="parsed-json"></pre>
+        <p class="collapsible__empty" data-empty-message>Upload a paystub to see what was read from it.</p>
+        <pre id="parsed-json" class="parsed-json" data-needs-paystub hidden></pre>
       </details>
+
+      <details class="collapsible" open>
+        <summary><h2>Lifetime Rates</h2></summary>
+        <p class="collapsible__empty" data-empty-message>Upload a paystub to see Lifetime Rates information</p>
+        <section class="overall" data-needs-paystub hidden>
+          <p id="overall-summary" class="overall__summary"></p>
+          <div class="rate-cards">
+            <article class="rate-card rate-card--apparent">
+              <h2>Apparent $/hour</h2>
+              <p class="rate-card__value" id="overall-apparent">&mdash;</p>
+            </article>
+            <article class="rate-card rate-card--actual">
+              <h2>Actual $/hour</h2>
+              <p class="rate-card__value" id="overall-actual">&mdash;</p>
+            </article>
+            <article class="rate-card rate-card--adjusted">
+              <h2>Adjusted $/hour</h2>
+              <p class="rate-card__value" id="overall-adjusted">&mdash;</p>
+            </article>
+          </div>
+        </section>
+      </details>
+    </section>
+
+    <section id="page-graphs" class="page" hidden>
+      <h2>Hourly rate by pay period</h2>
+      <p id="graphs-empty" class="graphs__empty">Load a paystub on the Home tab to see it graphed here.</p>
+
+      <div id="graphs-content" hidden>
+        <div class="graphs__controls">
+          <label><input id="show-averages" type="checkbox" /> Show averages</label>
+        </div>
+        <ul id="rate-chart-legend" class="chart-legend"></ul>
+        <div id="rate-chart" class="rate-chart">
+          <svg
+            id="rate-chart-svg"
+            tabindex="0"
+            role="img"
+            aria-label="Line chart of apparent, actual, and adjusted hourly rates per pay period. Use the left and right arrow keys to read each pay period's values; the table below lists them too."
+          ></svg>
+          <div id="rate-chart-tooltip" class="rate-chart__tooltip" hidden></div>
+        </div>
+
+        <details class="collapsible">
+          <summary><h2>Table</h2></summary>
+          <table class="rate-table">
+            <thead>
+              <tr><th>Pay period</th><th>Apparent</th><th>Actual</th><th>Adjusted</th></tr>
+            </thead>
+            <tbody id="rate-table-body"></tbody>
+            <tfoot id="rate-table-foot"></tfoot>
+          </table>
+        </details>
+      </div>
+    </section>
+
+    <section id="page-about" class="page about" hidden>
+      <h2>How this page works</h2>
+      <ol>
+        <li>
+          <strong>Load a paystub.</strong> On the Home tab, choose one or more paystub PDFs. Each file must be a
+          real PDF in the expected paystub layout, with a voucher date, voucher number, pay period, net pay, and
+          hours worked. A paystub that's already loaded is turned away, matched by its voucher date and number,
+          not its file name.
+        </li>
+        <li>
+          <strong>Everything stays in your browser.</strong> The PDF is read right here in this tab - it's never
+          uploaded anywhere. Nothing is saved either: closing or reloading the page clears every loaded paystub.
+          Switching between the Home, Graphs, and About tabs keeps them.
+        </li>
+        <li>
+          <strong>See the rates.</strong> Home shows the selected paystub's three hourly rates. Below them,
+          "Paystubs" lists every loaded paystub - click one to switch to it. "Calculations" and "Parsed paystub"
+          show the math and everything read from the selected PDF, and "Lifetime Rates" combines all loaded
+          paystubs - total pay divided by total hours, so longer pay periods count for more.
+        </li>
+        <li>
+          <strong>Compare pay periods.</strong> Graphs plots all three rates for every loaded paystub, oldest to
+          newest. Turn on "Show averages" for a dashed line at each rate's average.
+        </li>
+      </ol>
+
+      <h2>Apparent, Actual, and Adjusted</h2>
+      <p>
+        Every rate is pay divided by hours worked (training, in-store, and driving hours together). "Pay" always
+        means every earnings line - wages and tips - minus federal taxes. The three rates differ only in how they
+        treat driving your own car.
+      </p>
+
+      <article class="rate-explainer rate-explainer--apparent">
+        <h3>Apparent</h3>
+        <p>
+          What your pay <em>looks like</em> per hour if the reimbursements - mileage and GPS data - are counted
+          as pay. It's the biggest of the three, but reimbursements aren't really earnings - they pay you back for
+          using your own car and phone.
+        </p>
+        <p class="rate-explainer__formula">(pay + mileage reimbursement + GPS reimbursement) &divide; hours</p>
+      </article>
+
+      <article class="rate-explainer rate-explainer--actual">
+        <h3>Actual</h3>
+        <p>
+          What you're paid per hour once reimbursements are taken back out. Drivers are reimbursed for their car
+          at $0.45 per mile, plus a separate payment for GPS data use; neither counts here.
+        </p>
+        <p class="rate-explainer__formula">pay &divide; hours</p>
+      </article>
+
+      <article class="rate-explainer rate-explainer--adjusted">
+        <h3>Adjusted</h3>
+        <p>
+          What you're paid per hour after the real cost of driving your car, using the IRS's
+          <a href="https://www.irs.gov/tax-professionals/standard-mileage-rates" target="_blank" rel="noopener"
+            >standard mileage rate</a
+          >
+          for personal vehicles as that cost. Miles driven are worked out from the mileage reimbursement
+          (mileage reimbursement &divide; $0.45). The GPS reimbursement isn't for miles, so it plays no part here. Those miles are priced at the federal rate, and whatever the $0.45/mile reimbursement
+          didn't cover is taken out of pay. You can change the federal rate on the Adjusted card on Home.
+        </p>
+        <p class="rate-explainer__formula">
+          (pay &minus; (miles &times; federal rate &minus; mileage reimbursement)) &divide; hours
+        </p>
+      </article>
+
+      <p class="disclaimer">
+        These are this page's own estimates, not payroll or IRS figures. The federal mileage rate stands in for
+        typical vehicle costs, not your vehicle's actual cost.
+      </p>
     </section>
   </main>
 
+  <script type="module" src="tabs.js"></script>
   <script type="module" src="script.js"></script>
 </body>
 </html>

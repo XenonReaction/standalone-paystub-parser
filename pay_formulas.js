@@ -8,7 +8,7 @@ export const INPUT_FIELDS = {
   pay: ['training_pay', 'insider_pay', 'driver_pay', 'tips_reported_pay', 'tips_paid_pay'],
   taxes: ['federal_taxes'],
   hours: ['training_hours', 'insider_hours', 'driver_hours'],
-  reimbursement: ['car_reimbursement'],
+  reimbursement: ['car_reimbursement', 'gps_reimbursement'],
   rates: ['federal_rate_per_mile', 'actual_rate_per_mile'],
 };
 
@@ -22,7 +22,7 @@ export const formulas = {
   total_pay: (v) =>
     v.training_pay + v.insider_pay + v.driver_pay +
     v.tips_reported_pay + v.tips_paid_pay - v.federal_taxes,
-  apparent_pay: (v) => v.total_pay + v.car_reimbursement,
+  apparent_pay: (v) => v.total_pay + v.car_reimbursement + v.gps_reimbursement,
   total_hours: (v) => v.training_hours + v.insider_hours + v.driver_hours,
   apparent_pay_rate: (v) => v.apparent_pay / v.total_hours,
   hourly_rate: (v) => v.total_pay / v.total_hours,
