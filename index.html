@@ -24,43 +24,48 @@
     <section id="results" class="results" hidden>
       <section class="rate-cards">
         <article class="rate-card">
-          <h2>$/hour paid</h2>
-          <p class="rate-card__value" id="rate-paid">&mdash;</p>
-          <p class="rate-card__note">Net pay &divide; hours worked - what you actually took home, per hour.</p>
-        </article>
-
-        <article class="rate-card">
-          <h2>$/hour, reimbursements removed</h2>
-          <p class="rate-card__value" id="rate-no-reimbursements">&mdash;</p>
+          <h2>$/hour apparent</h2>
+          <p class="rate-card__value" id="rate-apparent">&mdash;</p>
           <p class="rate-card__note">
-            Same, but with mileage, GPS/data, and tips-reported entries stripped out entirely - just labor pay
-            after taxes.
+            Pay after federal taxes, plus the car reimbursement, &divide; hours worked - what the paycheck looks
+            like per hour.
           </p>
         </article>
 
         <article class="rate-card">
-          <h2>$/hour, mileage at federal rate</h2>
+          <h2>$/hour paid</h2>
+          <p class="rate-card__value" id="rate-hourly">&mdash;</p>
+          <p class="rate-card__note">
+            Pay after federal taxes &divide; hours worked, with the car reimbursement left out.
+          </p>
+        </article>
+
+        <article class="rate-card">
+          <h2>$/hour after car costs</h2>
           <p class="rate-card__value" id="rate-adjusted">&mdash;</p>
           <div class="rate-card__inputs">
             <label>
-              Actual reimbursement rate ($/mi)
-              <input id="actual-rate-input" type="number" step="0.01" min="0" value="0.45" />
-            </label>
-            <label>
               Federal rate ($/mi)
-              <input id="federal-rate-input" type="number" step="0.01" min="0" value="0.76" />
+              <input id="federal-rate-input" type="number" step="0.01" min="0" />
             </label>
           </div>
           <p class="rate-card__note" id="rate-adjusted-note">
-            The is the hourly rate if you calculated milage at the suggested federal rate.
+            $/hour paid, minus the car costs the reimbursement didn't cover at the federal rate above.
           </p>
         </article>
       </section>
+
+      <p id="unrecognized-warning" class="status status--error" hidden></p>
 
       <p class="disclaimer">
         These are this page's own estimates, not payroll or IRS figures. The federal mileage rate is a stand-in
         for typical vehicle costs, not this vehicle's actual cost.
       </p>
+
+      <h2>Calculation</h2>
+      <table class="calculation-table">
+        <tbody id="calculation-body"></tbody>
+      </table>
 
       <h2>Parsed paystub</h2>
       <pre id="parsed-json" class="parsed-json"></pre>

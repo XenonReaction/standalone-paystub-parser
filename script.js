@@ -6,6 +6,8 @@
 // for the pdf.js library code itself, not for anything in the file you pick.
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs';
 
+import { DEFAULT_RATES, UNITS, calculatePay } from './pay_formulas.js';
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
 
 // ---------------------------------------------------------------------------
@@ -246,6 +248,7 @@ function parsePaystubFromText(text) {
     period_end: isoDate(first(/Period End\s+(\d{2}\/\d{2}\/\d{2})/, text)),
     check_type: first(/Check Type\s+(\S+)/, text),
     gross_pay: money(first(new RegExp(`Total Gross Pay\\s+(${NUM})`), paymentSummary)),
+    federal_taxes: money(first(new RegExp(`Federal Taxes\\s+(${NUM})`), paymentSummary)),
     net_pay: money(first(new RegExp(`Net Pay\\s+(${NUM})`), paymentSummary)),
     direct_deposit_amount: money(first(new RegExp(`Direct Deposit Amount\\s+\\*+\\s*(${NUM})`), text)),
     net_check: money(first(new RegExp(`Net Check\\s+(${NUM})`), paymentSummary)),
@@ -256,52 +259,63 @@ function parsePaystubFromText(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Structured fields -> the three requested $/hour figures.
+// Structured fields -> pay_formulas.js inputs.
 // ---------------------------------------------------------------------------
+
+// Both job roles show up as "Regular" earnings lines; drivers are paid the
+// tipped wage, below minimum wage, and in-store (insider) work at or above it.
+const MINIMUM_WAGE = 7.25;
 
 function totalHoursWorked(stub) {
   return stub.earnings.reduce((sum, e) => sum + (e.hours ?? 0), 0);
 }
 
+function sumAmounts(lines) {
+  return lines.reduce((sum, line) => sum + (line.current_amount ?? 0), 0);
+}
+
+function sumHours(lines) {
+  return lines.reduce((sum, line) => sum + (line.hours ?? 0), 0);
+}
+
 /**
- * - $/hour paid: net_pay / hours - whatever actually landed in the bank, per hour.
- * - $/hour, reimbursements removed: strip out the *entire* net effect of
- *   other_deductions (mileage, GPS/data, the tips-reported wash) from net
- *   pay first, i.e. what's left is just labor pay after taxes.
- * - $/hour, mileage at federal rate: earnings for the period minus taxes
- *   (i.e. pay before any of the other_deductions line items are applied),
- *   with mileage added back in - recalculated as (mileage $ ÷ actual $/mi)
- *   x federal $/mi, instead of the actual reimbursement rate.
- *
- * Returns null if there's no hours to divide by, no net pay, or no line
- * item matching "mileage" to back out miles from.
+ * Sorts the paystub's line items into the inputs pay_formulas.js expects.
+ * Also returns the names of any earnings lines that didn't fit a category,
+ * since their pay would otherwise be silently left out of every total.
  */
-function calculateRates(stub, federalMileageRate, actualMileageRate) {
-  const hours = totalHoursWorked(stub);
-  const mileageLine = stub.other_deductions.find((d) => /mileage/i.test(d.name));
-  if (
-    hours <= 0 ||
-    stub.net_pay === null ||
-    !mileageLine ||
-    mileageLine.current_amount === null ||
-    !actualMileageRate ||
-    actualMileageRate <= 0
-  ) {
-    return null;
-  }
+function paystubToPayInputs(stub) {
+  const earningsMatching = (pattern) => stub.earnings.filter((e) => pattern.test(e.name));
+  const regular = earningsMatching(/^regular/i);
+  const driver = regular.filter((e) => e.rate !== null && e.rate < MINIMUM_WAGE);
+  const insider = regular.filter((e) => !driver.includes(e));
+  const training = earningsMatching(/training/i);
+  const tipsReported = earningsMatching(/tips reported/i);
+  const tipsPaid = earningsMatching(/tips paid/i);
 
-  const reimbursementNetEffect = -stub.other_deductions.reduce((sum, d) => sum + (d.current_amount ?? 0), 0);
-  const impliedMiles = -mileageLine.current_amount / actualMileageRate;
-  const recalculatedMileage = impliedMiles * federalMileageRate;
+  const categorized = [...regular, ...training, ...tipsReported, ...tipsPaid];
+  const unrecognized = stub.earnings.filter((e) => !categorized.includes(e)).map((e) => e.name);
 
-  const totalTaxes = stub.taxes.reduce((sum, t) => sum + (t.current_amount ?? 0), 0);
-  const earningsAfterTaxes = (stub.gross_pay ?? 0) - totalTaxes;
+  // Prefer the payment summary's own "Federal Taxes" total; fall back to
+  // adding up every tax line that isn't a state/local one.
+  const federalTaxes =
+    stub.federal_taxes !== null
+      ? Math.abs(stub.federal_taxes)
+      : sumAmounts(stub.taxes.filter((t) => !/SITW|state|local/i.test(t.name)));
 
-  const ratePaid = stub.net_pay / hours;
-  const rateNoReimbursements = (stub.net_pay - reimbursementNetEffect) / hours;
-  const rateAdjusted = (earningsAfterTaxes + recalculatedMileage) / hours;
-
-  return { hours, impliedMiles, recalculatedMileage, ratePaid, rateNoReimbursements, rateAdjusted };
+  const inputs = {
+    training_pay: sumAmounts(training),
+    insider_pay: sumAmounts(insider),
+    driver_pay: sumAmounts(driver),
+    tips_reported_pay: sumAmounts(tipsReported),
+    tips_paid_pay: sumAmounts(tipsPaid),
+    federal_taxes: federalTaxes,
+    training_hours: sumHours(training),
+    insider_hours: sumHours(insider),
+    driver_hours: sumHours(driver),
+    // Reimbursements are printed as negative deductions.
+    car_reimbursement: -sumAmounts(stub.other_deductions.filter((d) => /mileage/i.test(d.name))),
+  };
+  return { inputs, unrecognized };
 }
 
 // ---------------------------------------------------------------------------
@@ -312,13 +326,57 @@ const fileInput = document.getElementById('pdf-input');
 const statusEl = document.getElementById('status');
 const resultsEl = document.getElementById('results');
 const federalRateInput = document.getElementById('federal-rate-input');
-const actualRateInput = document.getElementById('actual-rate-input');
 const parsedJsonEl = document.getElementById('parsed-json');
+const calculationBodyEl = document.getElementById('calculation-body');
 
 let currentStub = null;
 
+federalRateInput.value = DEFAULT_RATES.federal_rate_per_mile;
+
 function formatDollars(value) {
   return value === null ? '—' : `$${value.toFixed(2)}`;
+}
+
+function formatValue(value, unit) {
+  if (unit === 'USD') {
+    return formatDollars(value);
+  }
+  if (unit === 'USD per hour') {
+    return `${formatDollars(value)}/hr`;
+  }
+  if (unit === 'USD per mile') {
+    return `${formatDollars(value)}/mi`;
+  }
+  return `${value.toFixed(2)} ${unit}`;
+}
+
+const INPUT_UNITS = {
+  training_hours: 'hours',
+  insider_hours: 'hours',
+  driver_hours: 'hours',
+  federal_rate_per_mile: 'USD per mile',
+  actual_rate_per_mile: 'USD per mile',
+};
+
+function renderCalculationTable(inputs, outputs) {
+  const rows = [
+    ...Object.entries(inputs).map(([name, value]) => [name, value, INPUT_UNITS[name] ?? 'USD', false]),
+    ...Object.entries(outputs).map(([name, value]) => [name, value, UNITS[name], true]),
+  ];
+  calculationBodyEl.replaceChildren(
+    ...rows.map(([name, value, unit, isOutput]) => {
+      const tr = document.createElement('tr');
+      if (isOutput) {
+        tr.className = 'calculation-table__output';
+      }
+      const label = document.createElement('td');
+      label.textContent = name;
+      const amount = document.createElement('td');
+      amount.textContent = formatValue(value, unit);
+      tr.append(label, amount);
+      return tr;
+    }),
+  );
 }
 
 function render() {
@@ -326,26 +384,29 @@ function render() {
     return;
   }
   const federalRate = parseFloat(federalRateInput.value) || 0;
-  const actualRate = parseFloat(actualRateInput.value) || 0;
-  const rates = calculateRates(currentStub, federalRate, actualRate);
+  const { inputs: stubInputs, unrecognized } = paystubToPayInputs(currentStub);
+  const { inputs, outputs } = calculatePay({ ...stubInputs, federal_rate_per_mile: federalRate });
 
-  document.getElementById('rate-paid').textContent = formatDollars(rates?.ratePaid ?? null);
-  document.getElementById('rate-no-reimbursements').textContent = formatDollars(rates?.rateNoReimbursements ?? null);
-  document.getElementById('rate-adjusted').textContent = formatDollars(rates?.rateAdjusted ?? null);
+  document.getElementById('rate-apparent').textContent = formatDollars(outputs.apparent_pay_rate);
+  document.getElementById('rate-hourly').textContent = formatDollars(outputs.hourly_rate);
+  document.getElementById('rate-adjusted').textContent = formatDollars(outputs.adjusted_hourly_rate);
 
-  const note = document.getElementById('rate-adjusted-note');
-  if (rates) {
-    note.textContent = `${rates.impliedMiles.toFixed(0)} implied miles (mileage reimbursement ÷ $${actualRate.toFixed(2)}/mi actual rate) × $${federalRate.toFixed(2)}/mi federal rate = ${formatDollars(rates.recalculatedMileage)}, added to earnings after taxes.`;
-  } else {
-    note.textContent = 'No mileage reimbursement line found on this paystub, so this can’t be calculated.';
-  }
+  document.getElementById('rate-adjusted-note').textContent =
+    `${outputs.miles_driven.toFixed(0)} miles × $${federalRate.toFixed(2)}/mi = ` +
+    `${formatDollars(outputs.federal_suggested_reimbursement)} in car costs, minus ` +
+    `${formatDollars(inputs.car_reimbursement)} reimbursed = ` +
+    `${formatDollars(outputs.missing_reimbursement)} taken out of pay.`;
 
+  const warning = document.getElementById('unrecognized-warning');
+  warning.hidden = unrecognized.length === 0;
+  warning.textContent = `Not counted in any total (unrecognized earnings lines): ${unrecognized.join(', ')}`;
+
+  renderCalculationTable(inputs, outputs);
   parsedJsonEl.textContent = JSON.stringify(currentStub, null, 2);
   resultsEl.hidden = false;
 }
 
 federalRateInput.addEventListener('input', render);
-actualRateInput.addEventListener('input', render);
 
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];

@@ -85,15 +85,6 @@ h1 {
   font-size: 0.8rem;
 }
 
-.rate-card__inputs label {
-  display: block;
-  margin-top: 0.4rem;
-}
-
-.rate-card__inputs label:first-child {
-  margin-top: 0;
-}
-
 .rate-card__inputs input {
   width: 5rem;
   display: block;
@@ -104,6 +95,26 @@ h1 {
   font-size: 0.8rem;
   color: #6b7280;
   font-style: italic;
+}
+
+.calculation-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.calculation-table td {
+  padding: 0.2rem 1.5rem 0.2rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.calculation-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.calculation-table__output td {
+  font-weight: 600;
 }
 
 .parsed-json {
@@ -131,5 +142,9 @@ h1 {
 
   .dropzone {
     border-color: #4b5563;
+  }
+
+  .calculation-table td {
+    border-color: #374151;
   }
 }
