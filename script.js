@@ -445,19 +445,62 @@ function render() {
 
 federalRateInput.addEventListener('input', render);
 
+// Fields a paystub must have for the parser's numbers (and its hash) to mean anything.
+const REQUIRED_FIELDS = ['voucher_date', 'voucher_number', 'period_begin', 'period_end', 'net_pay'];
+
+async function isPdfFile(file) {
+  const looksLikePdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  if (!looksLikePdf) {
+    return false;
+  }
+  // Every PDF starts with "%PDF-"; a renamed file of another type won't.
+  const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+  return String.fromCharCode(...header) === '%PDF-';
+}
+
+function missingFields(stub) {
+  const missing = REQUIRED_FIELDS.filter((field) => stub[field] === null);
+  if (totalHoursWorked(stub) <= 0) {
+    missing.push('hours worked');
+  }
+  return missing;
+}
+
+/** SHA-256 of the voucher date and number - identifies a paystub regardless of the file it came in. */
+async function paystubHash(stub) {
+  const bytes = new TextEncoder().encode(`${stub.voucher_date}|${stub.voucher_number}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function loadStub(file) {
-  const text = await extractLayoutText(file);
+  if (!(await isPdfFile(file))) {
+    throw new Error('This is not a PDF file.');
+  }
+
+  let text;
+  try {
+    text = await extractLayoutText(file);
+  } catch {
+    throw new Error("Couldn't read this PDF - it may be damaged or password-protected.");
+  }
+
   const stub = parsePaystubFromText(text);
-  if (totalHoursWorked(stub) <= 0 || stub.net_pay === null) {
-    throw new Error("Couldn't find hours worked and net pay in this PDF - is it the expected paystub layout?");
+  const missing = missingFields(stub);
+  if (missing.length > 0) {
+    throw new Error(
+      `Couldn't find ${missing.join(', ')} in this PDF - is it the expected paystub layout?`,
+    );
   }
-  // Loading the same paystub twice just switches back to the copy already loaded.
-  const existing = loadedStubs.find(
-    (entry) => stub.voucher_number !== null && entry.stub.voucher_number === stub.voucher_number,
-  );
+
+  stub.paystub_hash = await paystubHash(stub);
+  const existing = loadedStubs.find((entry) => entry.stub.paystub_hash === stub.paystub_hash);
   if (existing) {
-    return existing.stub;
+    throw new Error(
+      `This paystub (voucher ${stub.voucher_number}, ${stub.voucher_date}) is already loaded as ${existing.fileName}.`,
+    );
   }
+
   loadedStubs.push({ stub, fileName: file.name });
   return stub;
 }
