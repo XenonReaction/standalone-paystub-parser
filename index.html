@@ -15,11 +15,16 @@
     </p>
 
     <label class="dropzone" for="pdf-input">
-      <span>Choose a paystub PDF</span>
-      <input id="pdf-input" type="file" accept="application/pdf" />
+      <span id="pdf-input-label">Choose a paystub PDF</span>
+      <input id="pdf-input" type="file" accept="application/pdf" multiple />
     </label>
 
     <p id="status" class="status" role="status"></p>
+
+    <nav id="stub-list-section" class="stub-list-section" aria-label="Loaded paystubs" hidden>
+      <h2>Loaded paystubs</h2>
+      <ul id="stub-list" class="stub-list"></ul>
+    </nav>
 
     <section id="results" class="results" hidden>
       <section class="rate-cards">
@@ -62,13 +67,17 @@
         for typical vehicle costs, not this vehicle's actual cost.
       </p>
 
-      <h2>Calculation</h2>
-      <table class="calculation-table">
-        <tbody id="calculation-body"></tbody>
-      </table>
+      <details class="collapsible">
+        <summary><h2>Calculation</h2></summary>
+        <table class="calculation-table">
+          <tbody id="calculation-body"></tbody>
+        </table>
+      </details>
 
-      <h2>Parsed paystub</h2>
-      <pre id="parsed-json" class="parsed-json"></pre>
+      <details class="collapsible">
+        <summary><h2>Parsed paystub</h2></summary>
+        <pre id="parsed-json" class="parsed-json"></pre>
+      </details>
     </section>
   </main>
 

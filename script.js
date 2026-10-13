@@ -328,7 +328,12 @@ const resultsEl = document.getElementById('results');
 const federalRateInput = document.getElementById('federal-rate-input');
 const parsedJsonEl = document.getElementById('parsed-json');
 const calculationBodyEl = document.getElementById('calculation-body');
+const fileInputLabel = document.getElementById('pdf-input-label');
+const stubListSection = document.getElementById('stub-list-section');
+const stubListEl = document.getElementById('stub-list');
 
+// Every paystub parsed this session, in load order, and the one on display.
+const loadedStubs = [];
 let currentStub = null;
 
 federalRateInput.value = DEFAULT_RATES.federal_rate_per_mile;
@@ -379,7 +384,39 @@ function renderCalculationTable(inputs, outputs) {
   );
 }
 
+function stubLabel(stub) {
+  if (stub.period_begin && stub.period_end) {
+    return `${stub.period_begin} – ${stub.period_end}`;
+  }
+  return stub.voucher_date ?? 'Unknown period';
+}
+
+function renderStubList() {
+  stubListSection.hidden = loadedStubs.length === 0;
+  fileInputLabel.textContent = loadedStubs.length === 0 ? 'Choose a paystub PDF' : 'Load a new paystub';
+  stubListEl.replaceChildren(
+    ...loadedStubs.map(({ stub, fileName }) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('aria-current', String(stub === currentStub));
+      button.append(stubLabel(stub));
+      const meta = document.createElement('span');
+      meta.className = 'stub-list__meta';
+      meta.textContent = `${fileName} · net ${formatDollars(stub.net_pay)}`;
+      button.append(meta);
+      button.addEventListener('click', () => {
+        currentStub = stub;
+        render();
+      });
+      const li = document.createElement('li');
+      li.append(button);
+      return li;
+    }),
+  );
+}
+
 function render() {
+  renderStubList();
   if (!currentStub) {
     return;
   }
@@ -408,28 +445,45 @@ function render() {
 
 federalRateInput.addEventListener('input', render);
 
+async function loadStub(file) {
+  const text = await extractLayoutText(file);
+  const stub = parsePaystubFromText(text);
+  if (totalHoursWorked(stub) <= 0 || stub.net_pay === null) {
+    throw new Error("Couldn't find hours worked and net pay in this PDF - is it the expected paystub layout?");
+  }
+  // Loading the same paystub twice just switches back to the copy already loaded.
+  const existing = loadedStubs.find(
+    (entry) => stub.voucher_number !== null && entry.stub.voucher_number === stub.voucher_number,
+  );
+  if (existing) {
+    return existing.stub;
+  }
+  loadedStubs.push({ stub, fileName: file.name });
+  return stub;
+}
+
 fileInput.addEventListener('change', async () => {
-  const file = fileInput.files?.[0];
-  if (!file) {
+  const files = [...(fileInput.files ?? [])];
+  // Clear the picker so choosing the same file again still fires 'change'.
+  fileInput.value = '';
+  if (files.length === 0) {
     return;
   }
 
   statusEl.textContent = 'Reading PDF…';
   statusEl.classList.remove('status--error');
-  resultsEl.hidden = true;
-  currentStub = null;
 
-  try {
-    const text = await extractLayoutText(file);
-    const stub = parsePaystubFromText(text);
-    if (totalHoursWorked(stub) <= 0 || stub.net_pay === null) {
-      throw new Error("Couldn't find hours worked and net pay in this PDF - is it the expected paystub layout?");
+  const errors = [];
+  for (const file of files) {
+    try {
+      currentStub = await loadStub(file);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to parse this PDF.';
+      errors.push(files.length > 1 ? `${file.name}: ${message}` : message);
     }
-    currentStub = stub;
-    statusEl.textContent = '';
-    render();
-  } catch (error) {
-    statusEl.textContent = error instanceof Error ? error.message : 'Failed to parse this PDF.';
-    statusEl.classList.add('status--error');
   }
+
+  statusEl.textContent = errors.join(' ');
+  statusEl.classList.toggle('status--error', errors.length > 0);
+  render();
 });

@@ -45,6 +45,54 @@ h1 {
   color: #b91c1c;
 }
 
+.stub-list-section[hidden] {
+  display: none;
+}
+
+.stub-list-section h2 {
+  font-size: 0.95rem;
+  color: #4b5563;
+  margin: 0 0 0.5rem;
+}
+
+.stub-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stub-list button {
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stub-list button:hover {
+  border-color: #4b5563;
+}
+
+.stub-list button[aria-current="true"] {
+  border-color: #2563eb;
+  background: #eff6ff;
+  font-weight: 600;
+}
+
+.stub-list__meta {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6b7280;
+}
+
 .results[hidden] {
   display: none;
 }
@@ -97,6 +145,33 @@ h1 {
   font-style: italic;
 }
 
+.collapsible summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible summary::before {
+  content: "\25B6";
+  font-size: 0.75rem;
+  transition: transform 0.15s ease;
+}
+
+.collapsible[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible summary h2 {
+  margin: 1rem 0;
+}
+
 .calculation-table {
   border-collapse: collapse;
   font-size: 0.85rem;
@@ -142,6 +217,15 @@ h1 {
 
   .dropzone {
     border-color: #4b5563;
+  }
+
+  .stub-list button {
+    border-color: #374151;
+  }
+
+  .stub-list button[aria-current="true"] {
+    border-color: #60a5fa;
+    background: #1e3a5f;
   }
 
   .calculation-table td {
