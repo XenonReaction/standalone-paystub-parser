@@ -3,6 +3,8 @@
 // script.js owns the paystubs and calls updateRateChart() whenever they or the
 // federal rate change; this file only draws what it's given.
 
+import { FEDERAL_MINIMUM_WAGE } from './pay_formulas.js?v=3';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HEIGHT = 320;
 const MARGIN = { top: 16, right: 96, bottom: 36, left: 56 };
@@ -23,7 +25,8 @@ const contentEl = document.getElementById('graphs-content');
 const chartEl = document.getElementById('rate-chart');
 const svg = document.getElementById('rate-chart-svg');
 const tooltipEl = document.getElementById('rate-chart-tooltip');
-const legendEl = document.getElementById('rate-chart-legend');
+const seriesToggles = [...document.querySelectorAll('[data-series]')];
+const minimumWageToggle = document.getElementById('show-minimum-wage');
 const tableBodyEl = document.getElementById('rate-table-body');
 const tableFootEl = document.getElementById('rate-table-foot');
 const averagesToggle = document.getElementById('show-averages');
@@ -33,6 +36,15 @@ let rows = [];
 // Where the last draw put things, for the hover/keyboard handlers.
 let layout = null;
 let activeIndex = null;
+// Series switched on with their checkboxes in index.html.
+const shownSeries = () =>
+  SERIES.filter((s) => seriesToggles.find((toggle) => toggle.dataset.series === s.key).checked);
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const [mwYear, mwMonth, mwDay] = FEDERAL_MINIMUM_WAGE.since.split('-');
+document.getElementById('minimum-wage-since').textContent =
+  `${MONTHS[parseInt(mwMonth, 10) - 1]} ${parseInt(mwDay, 10)}, ${mwYear}`;
+document.getElementById('minimum-wage-rate').textContent = `${formatDollars(FEDERAL_MINIMUM_WAGE.rate)}/hr`;
 
 function formatDollars(value) {
   return `$${value.toFixed(2)}`;
@@ -88,8 +100,13 @@ function draw() {
   const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
   const showAverages = averagesToggle.checked;
 
-  const values = rows.flatMap((row) => SERIES.map((s) => row[s.key]));
-  const { lo, hi, ticks, decimals } = niceTicks(Math.min(0, ...values), Math.max(...values));
+  // Scale to the shown lines only, so hiding one can let the others fill the plot.
+  const showMinimumWage = minimumWageToggle.checked;
+  const values = rows.flatMap((row) => shownSeries().map((s) => row[s.key]));
+  if (showMinimumWage) {
+    values.push(FEDERAL_MINIMUM_WAGE.rate);
+  }
+  const { lo, hi, ticks, decimals } = niceTicks(Math.min(0, ...values), Math.max(0, ...values));
   const x = (i) => MARGIN.left + (rows.length === 1 ? plotWidth / 2 : (i * plotWidth) / (rows.length - 1));
   const y = (v) => MARGIN.top + plotHeight - ((v - lo) / (hi - lo)) * plotHeight;
   layout = { x, width, plotWidth };
@@ -117,16 +134,21 @@ function draw() {
   });
 
   if (showAverages) {
-    for (const s of SERIES) {
+    for (const s of shownSeries()) {
       const line = svgEl('line', { class: 'rate-chart__average', x1: MARGIN.left, x2: MARGIN.left + plotWidth, y1: y(average(s.key)), y2: y(average(s.key)) }, svg);
       line.style.stroke = s.color;
     }
   }
 
+  if (showMinimumWage) {
+    const wageY = y(FEDERAL_MINIMUM_WAGE.rate);
+    svgEl('line', { class: 'rate-chart__minimum-wage', x1: MARGIN.left, x2: MARGIN.left + plotWidth, y1: wageY, y2: wageY }, svg);
+  }
+
   const crosshair = svgEl('line', { class: 'rate-chart__crosshair', y1: MARGIN.top, y2: MARGIN.top + plotHeight, visibility: 'hidden' }, svg);
   layout.crosshair = crosshair;
 
-  for (const s of SERIES) {
+  for (const s of shownSeries()) {
     const path = svgEl('path', { class: 'rate-chart__line', d: rows.map((row, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(row[s.key])}`).join('') }, svg);
     path.style.stroke = s.color;
     rows.forEach((row, i) => {
@@ -137,12 +159,18 @@ function draw() {
 
   // Name each line at its last point, so it isn't identified by color alone.
   const last = rows.length - 1;
-  const endLabels = spreadLabels(SERIES.map((s) => ({ s, y: y(rows[last][s.key]) })));
-  for (const { s, y: labelY } of endLabels) {
+  const endLabels = shownSeries().map((s) => ({ text: s.label, color: s.color, y: y(rows[last][s.key]) }));
+  if (showMinimumWage) {
+    endLabels.push({ text: 'Min. wage', color: 'var(--chart-axis)', y: y(FEDERAL_MINIMUM_WAGE.rate), dotted: true });
+  }
+  for (const { text, color, dotted, y: labelY } of spreadLabels(endLabels)) {
     const key = svgEl('line', { class: 'rate-chart__end-key', x1: x(last) + 10, x2: x(last) + 22, y1: labelY, y2: labelY }, svg);
-    key.style.stroke = s.color;
+    key.style.stroke = color;
+    if (dotted) {
+      key.style.strokeDasharray = '2 3';
+    }
     const label = svgEl('text', { class: 'rate-chart__end-label', x: x(last) + 26, y: labelY, 'dominant-baseline': 'middle' }, svg);
-    label.textContent = s.label;
+    label.textContent = text;
   }
 
   // Invisible layer over the whole plot so the pointer only has to be near a pay period.
@@ -172,7 +200,7 @@ function showTooltip(index) {
   title.textContent = row.label;
   tooltipEl.replaceChildren(
     title,
-    ...SERIES.map((s) => {
+    ...shownSeries().map((s) => {
       const item = document.createElement('p');
       item.className = 'rate-chart__tooltip-row';
       const key = document.createElement('span');
@@ -187,6 +215,19 @@ function showTooltip(index) {
       return item;
     }),
   );
+  if (minimumWageToggle.checked) {
+    const item = document.createElement('p');
+    item.className = 'rate-chart__tooltip-row';
+    const key = document.createElement('span');
+    key.className = 'line-key line-key--dotted';
+    const value = document.createElement('strong');
+    value.textContent = `${formatDollars(FEDERAL_MINIMUM_WAGE.rate)}/hr`;
+    const name = document.createElement('span');
+    name.className = 'rate-chart__tooltip-name';
+    name.textContent = 'Federal minimum wage';
+    item.append(key, value, name);
+    tooltipEl.append(item);
+  }
   tooltipEl.hidden = false;
   // Keep the tooltip inside the chart: flip it to the left of the crosshair near the right edge.
   const tooltipWidth = tooltipEl.offsetWidth;
@@ -201,24 +242,12 @@ function hideTooltip() {
   layout?.crosshair.setAttribute('visibility', 'hidden');
 }
 
-function renderLegend() {
-  const showAverages = averagesToggle.checked;
-  legendEl.replaceChildren(
-    ...SERIES.map((s) => {
-      const item = document.createElement('li');
-      const key = document.createElement('span');
-      key.className = 'line-key';
-      key.style.background = s.color;
-      item.append(key, s.label);
-      if (showAverages) {
-        const avg = document.createElement('span');
-        avg.className = 'chart-legend__average';
-        avg.textContent = ` avg ${formatDollars(average(s.key))}/hr`;
-        item.append(avg);
-      }
-      return item;
-    }),
-  );
+/** Fills in each series' average next to its checkbox while "Show averages" is on. */
+function renderAverages() {
+  for (const el of document.querySelectorAll('[data-average-for]')) {
+    el.hidden = !averagesToggle.checked;
+    el.textContent = `avg ${formatDollars(average(el.dataset.averageFor))}/hr`;
+  }
 }
 
 function renderTable() {
@@ -243,7 +272,7 @@ function render() {
   if (rows.length === 0) {
     return;
   }
-  renderLegend();
+  renderAverages();
   renderTable();
   draw();
 }
@@ -255,6 +284,10 @@ export function updateRateChart(newRows) {
 }
 
 averagesToggle.addEventListener('change', render);
+// Only the chart depends on which lines are shown.
+for (const toggle of [...seriesToggles, minimumWageToggle]) {
+  toggle.addEventListener('change', draw);
+}
 new ResizeObserver(draw).observe(chartEl);
 
 // Keyboard: focus the chart, then Left/Right step through pay periods.

@@ -12,6 +12,9 @@ export const INPUT_FIELDS = {
   rates: ['federal_rate_per_mile', 'actual_rate_per_mile'],
 };
 
+// The federal minimum wage (USD per hour) and the date it took effect.
+export const FEDERAL_MINIMUM_WAGE = { rate: 7.25, since: '2009-07-24' };
+
 // USD per mile; either can be overridden by passing it in the inputs.
 export const DEFAULT_RATES = {
   federal_rate_per_mile: 0.76,

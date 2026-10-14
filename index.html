@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Paystub Parser (standalone)</title>
-  <link rel="stylesheet" href="style.css" />
+  <!-- Bump ?v= on every file below (and on the imports in script.js and graphs.js) whenever any of
+       them change, so browsers never mix a cached old file with a new one. -->
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
   <main>
@@ -22,10 +24,107 @@
         tab - nothing is uploaded anywhere, and nothing is saved once you close or reload this page.
       </p>
 
-      <label class="dropzone" for="pdf-input">
+      <div class="input-toggle" role="group" aria-label="How to add a paystub">
+        <button type="button" class="input-toggle__option" data-input-mode="upload" aria-pressed="true">Upload PDF</button>
+        <button type="button" class="input-toggle__option" data-input-mode="manual" aria-pressed="false">Enter values</button>
+      </div>
+
+      <label id="upload-panel" class="dropzone" for="pdf-input">
         <span id="pdf-input-label">Choose a paystub PDF</span>
         <input id="pdf-input" type="file" accept="application/pdf" multiple />
       </label>
+
+      <!-- Fields follow the paystub's own order. Each "?" shows the paragraph named by its aria-controls. -->
+      <form id="manual-form" class="manual-form" hidden novalidate>
+        <!-- Focusable so the example also shows on keyboard focus and on tap. -->
+        <p class="manual-form__intro">
+          Enter your information from your paystub from
+          <span class="example-peek" tabindex="0" aria-describedby="example-peek-image">this<img
+              id="example-peek-image"
+              class="example-peek__image"
+              src="Example%20of%20paystub%20data.png"
+              alt="Example paystub section with Total Gross Pay, Taxes, and Other Deductions from Pay tables"
+          /></span>
+          section.
+        </p>
+        <fieldset>
+          <legend>Pay period</legend>
+          <div class="manual-form__field">
+            <label for="manual-period-begin">Period Begin</label>
+            <input id="manual-period-begin" name="period_begin" type="date" required />
+            <button type="button" class="help-button" aria-label="What is Period Begin?" aria-expanded="false" aria-controls="help-period-begin">?</button>
+            <p id="help-period-begin" class="manual-form__help" hidden>The first day of the pay period, next to "Period Begin" at the top of the paystub.</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-period-end">Period End</label>
+            <input id="manual-period-end" name="period_end" type="date" required />
+            <button type="button" class="help-button" aria-label="What is Period End?" aria-expanded="false" aria-controls="help-period-end">?</button>
+            <p id="help-period-end" class="manual-form__help" hidden>The last day of the pay period, next to "Period End" at the top of the paystub.</p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Pay</legend>
+          <div class="manual-form__field">
+            <label for="manual-training">Training</label>
+            <input id="manual-training" name="training" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Training?" aria-expanded="false" aria-controls="help-training">?</button>
+            <p id="help-training" class="manual-form__help" hidden>Defaults to 0. Should be listed if it was your first week.</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-driver">Driver Pay</label>
+            <input id="manual-driver" name="driver" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Driver Pay?" aria-expanded="false" aria-controls="help-driver">?</button>
+            <p id="help-driver" class="manual-form__help" hidden>Pay next to "Rate" 4.50. Look for the value under "Current Amt".</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-insider">Insider Pay</label>
+            <input id="manual-insider" name="insider" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Insider Pay?" aria-expanded="false" aria-controls="help-insider">?</button>
+            <p id="help-insider" class="manual-form__help" hidden>Pay next to "Rate" 7.25. Look for the value under "Current Amt".</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-tips-reported">Tips Reported</label>
+            <input id="manual-tips-reported" name="tips_reported" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Tips Reported?" aria-expanded="false" aria-controls="help-tips-reported">?</button>
+            <p id="help-tips-reported" class="manual-form__help" hidden>Defaults to 0. If you report cash tips, there should be a value.</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-tips-paid">Tips Paid</label>
+            <input id="manual-tips-paid" name="tips_paid" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Tips Paid?" aria-expanded="false" aria-controls="help-tips-paid">?</button>
+            <p id="help-tips-paid" class="manual-form__help" hidden>Tips paid from credit cards and online payments.</p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Taxes</legend>
+          <div class="manual-form__field">
+            <label for="manual-taxes">Total</label>
+            <input id="manual-taxes" name="taxes" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is the taxes Total?" aria-expanded="false" aria-controls="help-taxes">?</button>
+            <p id="help-taxes" class="manual-form__help" hidden>Total the taxes under "Current Amt".</p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Deductions</legend>
+          <div class="manual-form__field">
+            <label for="manual-gps">GPS</label>
+            <input id="manual-gps" name="gps" type="number" inputmode="decimal" step="0.01" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is GPS?" aria-expanded="false" aria-controls="help-gps">?</button>
+            <p id="help-gps" class="manual-form__help" hidden>Reimbursement for GPS data. Under "Current Amt".</p>
+          </div>
+          <div class="manual-form__field">
+            <label for="manual-mileage">Mileage</label>
+            <input id="manual-mileage" name="mileage" type="number" inputmode="decimal" step="0.01" placeholder="0.00" />
+            <button type="button" class="help-button" aria-label="What is Mileage?" aria-expanded="false" aria-controls="help-mileage">?</button>
+            <p id="help-mileage" class="manual-form__help" hidden>Reimbursement for car usage. Under "Current Amt".</p>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="manual-form__submit">Add paystub</button>
+      </form>
 
       <p id="status" class="status" role="status"></p>
 
@@ -55,8 +154,10 @@
             <div class="rate-card__inputs">
               <label>
                 Federal rate ($/mi)
-                <input id="federal-rate-input" type="number" step="0.01" min="0" />
+                <input id="federal-rate-input" type="number" step="0.005" min="0" />
               </label>
+              <p id="federal-rate-source" class="rate-card__source"></p>
+              <button id="federal-rate-reset" type="button" class="link-button" hidden>Use the IRS rate</button>
             </div>
             <p class="rate-card__note" id="rate-adjusted-note">
               Actual $/hour, minus the car costs the mileage reimbursement didn't cover at the federal rate above.
@@ -73,7 +174,7 @@
       </section>
 
       <!-- Each section shows its "Upload a paystub" message until something is loaded. -->
-      <details class="collapsible" open>
+      <details class="collapsible">
         <summary>
           <h2>Paystubs</h2>
           <span class="collapsible__description">Every paystub you've loaded this session - click one to show its rates above.</span>
@@ -135,10 +236,37 @@
       <p id="graphs-empty" class="graphs__empty">Load a paystub on the Home tab to see it graphed here.</p>
 
       <div id="graphs-content" hidden>
-        <div class="graphs__controls">
-          <label><input id="show-averages" type="checkbox" /> Show averages</label>
-        </div>
-        <ul id="rate-chart-legend" class="chart-legend"></ul>
+        <ul class="chart-controls" aria-label="Chart lines">
+          <li><label><input id="show-averages" type="checkbox" /> Show averages</label></li>
+          <li>
+            <label>
+              <input type="checkbox" data-series="apparent" checked />
+              <span class="line-key" style="background: var(--series-1)"></span> Apparent
+              <span class="chart-controls__average" data-average-for="apparent" hidden></span>
+            </label>
+          </li>
+          <li>
+            <label>
+              <input type="checkbox" data-series="actual" checked />
+              <span class="line-key" style="background: var(--series-2)"></span> Actual
+              <span class="chart-controls__average" data-average-for="actual" hidden></span>
+            </label>
+          </li>
+          <li>
+            <label>
+              <input type="checkbox" data-series="adjusted" checked />
+              <span class="line-key" style="background: var(--series-3)"></span> Adjusted
+              <span class="chart-controls__average" data-average-for="adjusted" hidden></span>
+            </label>
+          </li>
+          <li>
+            <label>
+              <input id="show-minimum-wage" type="checkbox" />
+              <span>Show Federal Minimum Wage since <span id="minimum-wage-since"></span>
+                (<span id="minimum-wage-rate"></span>)</span>
+            </label>
+          </li>
+        </ul>
         <div id="rate-chart" class="rate-chart">
           <svg
             id="rate-chart-svg"
@@ -169,7 +297,9 @@
           <strong>Load a paystub.</strong> On the Home tab, choose one or more paystub PDFs. Each file must be a
           real PDF in the expected paystub layout, with a voucher date, voucher number, pay period, net pay, and
           hours worked. A paystub that's already loaded is turned away, matched by its voucher date and number,
-          not its file name.
+          not its file name. No PDF? Switch to "Enter values" and type in the amounts from the paystub instead -
+          hours are worked out from each pay line's rate ($7.25 for training and insider pay, $4.50 for driver
+          pay). An entry for a pay period that's already loaded is turned away.
         </li>
         <li>
           <strong>Everything stays in your browser.</strong> The PDF is read right here in this tab - it's never
@@ -223,7 +353,9 @@
           >
           for personal vehicles as that cost. Miles driven are worked out from the mileage reimbursement
           (mileage reimbursement &divide; $0.45). The GPS reimbursement isn't for miles, so it plays no part here. Those miles are priced at the federal rate, and whatever the $0.45/mile reimbursement
-          didn't cover is taken out of pay. You can change the federal rate on the Adjusted card on Home.
+          didn't cover is taken out of pay. Each paystub uses the IRS rate in effect on the first day of its pay
+          period - a pay period that crosses into a new rate keeps the earlier one. You can change a paystub's
+          federal rate on the Adjusted card on Home; that change applies to that paystub only.
         </p>
         <p class="rate-explainer__formula">
           (pay &minus; (miles &times; federal rate &minus; mileage reimbursement)) &divide; hours
@@ -234,10 +366,18 @@
         These are this page's own estimates, not payroll or IRS figures. The federal mileage rate stands in for
         typical vehicle costs, not your vehicle's actual cost.
       </p>
+
+      <h2>Source code</h2>
+      <p>
+        All of this page's files are on GitHub at
+        <a href="https://github.com/XenonReaction/standalone-paystub-parser" target="_blank" rel="noopener"
+          >github.com/XenonReaction/standalone-paystub-parser</a
+        >, including the parser, the pay formulas, and the IRS mileage rate table.
+      </p>
     </section>
   </main>
 
-  <script type="module" src="tabs.js"></script>
-  <script type="module" src="script.js"></script>
+  <script type="module" src="tabs.js?v=3"></script>
+  <script type="module" src="script.js?v=3"></script>
 </body>
 </html>

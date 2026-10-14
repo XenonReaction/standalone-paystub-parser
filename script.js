@@ -6,8 +6,9 @@
 // for the pdf.js library code itself, not for anything in the file you pick.
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.min.mjs';
 
-import { DEFAULT_RATES, UNITS, calculateOverallPay, calculatePay } from './pay_formulas.js';
-import { updateRateChart } from './graphs.js';
+import { FEDERAL_MINIMUM_WAGE, UNITS, calculateOverallPay, calculatePay } from './pay_formulas.js?v=3';
+import { describeRatePeriod, mileageRateOn } from './mileage_rates.js?v=3';
+import { updateRateChart } from './graphs.js?v=3';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.3.289/pdf.worker.min.mjs';
 
@@ -265,7 +266,10 @@ function parsePaystubFromText(text) {
 
 // Both job roles show up as "Regular" earnings lines; drivers are paid the
 // tipped wage, below minimum wage, and in-store (insider) work at or above it.
-const MINIMUM_WAGE = 7.25;
+const MINIMUM_WAGE = FEDERAL_MINIMUM_WAGE.rate;
+// The driver rate printed on the paystub; manual entries use it (and
+// MINIMUM_WAGE for training and insider pay) to work out hours from pay.
+const DRIVER_RATE = 4.5;
 
 function totalHoursWorked(stub) {
   return stub.earnings.reduce((sum, e) => sum + (e.hours ?? 0), 0);
@@ -332,12 +336,24 @@ const parsedJsonEl = document.getElementById('parsed-json');
 const calculationBodyEl = document.getElementById('calculation-body');
 const fileInputLabel = document.getElementById('pdf-input-label');
 const stubListEl = document.getElementById('stub-list');
+const federalRateSourceEl = document.getElementById('federal-rate-source');
+const federalRateResetEl = document.getElementById('federal-rate-reset');
 
 // Every paystub parsed this session, in load order, and the one on display.
 const loadedStubs = [];
 let currentStub = null;
+// Federal rates typed into the Adjusted card, by stub; any stub not in here
+// uses the IRS rate for the first day of its pay period.
+const federalRateOverrides = new Map();
 
-federalRateInput.value = DEFAULT_RATES.federal_rate_per_mile;
+function irsRateFor(stub) {
+  return mileageRateOn(stub.period_begin);
+}
+
+/** USD per mile. */
+function federalRateFor(stub) {
+  return federalRateOverrides.get(stub) ?? irsRateFor(stub).business / 100;
+}
 
 function formatDollars(value) {
   return value === null ? '—' : `$${value.toFixed(2)}`;
@@ -406,7 +422,7 @@ function renderStubList() {
   document.querySelectorAll('[data-needs-paystub]').forEach((el) => (el.hidden = !hasStubs));
   fileInputLabel.textContent = loadedStubs.length === 0 ? 'Choose a paystub PDF' : 'Load a new paystub';
   stubListEl.replaceChildren(
-    ...loadedStubs.map(({ stub, fileName }) => {
+    ...loadedStubs.map(({ stub, fileName = 'Entered manually' }) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.setAttribute('aria-current', String(stub === currentStub));
@@ -426,16 +442,16 @@ function renderStubList() {
   );
 }
 
-function calculateStubPay(stub, federalRate) {
+function calculateStubPay(stub) {
   const { inputs: stubInputs, unrecognized } = paystubToPayInputs(stub);
-  return { ...calculatePay({ ...stubInputs, federal_rate_per_mile: federalRate }), unrecognized };
+  return { ...calculatePay({ ...stubInputs, federal_rate_per_mile: federalRateFor(stub) }), unrecognized };
 }
 
-function renderOverall(federalRate) {
+function renderOverall() {
   if (loadedStubs.length === 0) {
     return;
   }
-  const overall = calculateOverallPay(loadedStubs.map(({ stub }) => calculateStubPay(stub, federalRate).inputs));
+  const overall = calculateOverallPay(loadedStubs.map(({ stub }) => calculateStubPay(stub).inputs));
   document.getElementById('overall-apparent').textContent = formatDollars(overall.overall_apparent_hourly_rate);
   document.getElementById('overall-actual').textContent = formatDollars(overall.overall_actual_hourly_rate);
   document.getElementById('overall-adjusted').textContent = formatDollars(overall.overall_adjusted_hourly_rate);
@@ -447,10 +463,10 @@ function renderOverall(federalRate) {
     `${formatDollars(overall.overall_adjusted_pay)} adjusted pay.`;
 }
 
-function renderGraphs(federalRate) {
+function renderGraphs() {
   updateRateChart(
     loadedStubs.map(({ stub }) => {
-      const { outputs } = calculateStubPay(stub, federalRate);
+      const { outputs } = calculateStubPay(stub);
       return {
         sortKey: stub.period_begin,
         label: stubLabel(stub),
@@ -465,13 +481,14 @@ function renderGraphs(federalRate) {
 
 function render() {
   renderStubList();
-  renderOverall(parseFloat(federalRateInput.value) || 0);
-  renderGraphs(parseFloat(federalRateInput.value) || 0);
+  renderOverall();
+  renderGraphs();
   if (!currentStub) {
     return;
   }
-  const federalRate = parseFloat(federalRateInput.value) || 0;
-  const { inputs, outputs, unrecognized } = calculateStubPay(currentStub, federalRate);
+  const federalRate = federalRateFor(currentStub);
+  const { inputs, outputs, unrecognized } = calculateStubPay(currentStub);
+  renderFederalRate(currentStub);
 
   document.getElementById('current-stub-title').textContent = `Paystub: ${stubLabel(currentStub)}`;
   document.getElementById('rate-apparent').textContent = formatDollars(outputs.apparent_pay_rate);
@@ -479,7 +496,7 @@ function render() {
   document.getElementById('rate-adjusted').textContent = formatDollars(outputs.adjusted_hourly_rate);
 
   document.getElementById('rate-adjusted-note').textContent =
-    `${outputs.miles_driven.toFixed(0)} miles × $${federalRate.toFixed(2)}/mi = ` +
+    `${outputs.miles_driven.toFixed(0)} miles × $${formatMileageRate(federalRate)}/mi = ` +
     `${formatDollars(outputs.federal_suggested_reimbursement)} in car costs, minus ` +
     `${formatDollars(inputs.car_reimbursement)} mileage reimbursed = ` +
     `${formatDollars(outputs.missing_reimbursement)} taken out of pay.`;
@@ -493,7 +510,40 @@ function render() {
   resultsEl.hidden = false;
 }
 
-federalRateInput.addEventListener('input', render);
+/** 0.725 -> "0.725", 0.76 -> "0.76" - IRS rates can run to a tenth of a cent. */
+function formatMileageRate(usdPerMile) {
+  return usdPerMile.toFixed(3).replace(/0$/, '');
+}
+
+function renderFederalRate(stub) {
+  // Leave the box alone while it's being typed in, so "0." isn't rewritten to "0".
+  if (document.activeElement !== federalRateInput) {
+    federalRateInput.value = formatMileageRate(federalRateFor(stub));
+  }
+  const irs = irsRateFor(stub);
+  const irsRate = `$${formatMileageRate(irs.business / 100)}/mi (${describeRatePeriod(irs)}, ${irs.sources.join(', ')})`;
+  const periodStart = displayDate(stub.period_begin);
+  let source = irs.outOfRange
+    ? `No IRS rate on file for ${periodStart}; using the closest one, ${irsRate}.`
+    : `IRS rate on ${periodStart}, the pay period's first day: ${irsRate}.`;
+  if (federalRateOverrides.has(stub)) {
+    source = `Changed by you. ${source}`;
+  }
+  federalRateSourceEl.textContent = source;
+  federalRateResetEl.hidden = !federalRateOverrides.has(stub);
+}
+
+federalRateInput.addEventListener('input', () => {
+  if (currentStub) {
+    federalRateOverrides.set(currentStub, parseFloat(federalRateInput.value) || 0);
+    render();
+  }
+});
+
+federalRateResetEl.addEventListener('click', () => {
+  federalRateOverrides.delete(currentStub);
+  render();
+});
 
 // Fields a paystub must have for the parser's numbers (and its hash) to mean anything.
 const REQUIRED_FIELDS = ['voucher_date', 'voucher_number', 'period_begin', 'period_end', 'net_pay'];
@@ -578,5 +628,123 @@ fileInput.addEventListener('change', async () => {
 
   statusEl.textContent = errors.join(' ');
   statusEl.classList.toggle('status--error', errors.length > 0);
+  render();
+});
+
+// ---------------------------------------------------------------------------
+// Manual entry: the form's amounts become a stub shaped like a parsed PDF's,
+// so paystubToPayInputs and everything after it treat both the same way.
+// ---------------------------------------------------------------------------
+
+const uploadPanel = document.getElementById('upload-panel');
+const manualForm = document.getElementById('manual-form');
+const modeButtons = [...document.querySelectorAll('[data-input-mode]')];
+
+for (const button of modeButtons) {
+  button.addEventListener('click', () => {
+    const manual = button.dataset.inputMode === 'manual';
+    uploadPanel.hidden = manual;
+    manualForm.hidden = !manual;
+    modeButtons.forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+    statusEl.textContent = '';
+    statusEl.classList.remove('status--error');
+  });
+}
+
+for (const button of manualForm.querySelectorAll('.help-button')) {
+  button.addEventListener('click', () => {
+    const help = document.getElementById(button.getAttribute('aria-controls'));
+    help.hidden = !help.hidden;
+    button.setAttribute('aria-expanded', String(!help.hidden));
+  });
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+function earningsLine(name, amount, rate) {
+  return { name, hours: rate ? round2(amount / rate) : 0, rate, current_amount: amount, ytd_amount: null };
+}
+
+/** Builds a stub from the form, or throws with what needs fixing. */
+function stubFromForm(form) {
+  const data = new FormData(form);
+  // Blank boxes count as 0. Deductions are printed as negatives on the
+  // paystub, so either sign is accepted for those.
+  const amount = (name) => parseFloat(data.get(name)) || 0;
+  const pay = {
+    training: amount('training'),
+    driver: amount('driver'),
+    insider: amount('insider'),
+    tipsReported: amount('tips_reported'),
+    tipsPaid: amount('tips_paid'),
+  };
+  const taxes = amount('taxes');
+  const gps = Math.abs(amount('gps'));
+  const mileage = Math.abs(amount('mileage'));
+  const periodBegin = data.get('period_begin') || null;
+  const periodEnd = data.get('period_end') || null;
+
+  if (!periodBegin || !periodEnd) {
+    throw new Error('Enter the pay period\'s begin and end dates.');
+  }
+  if (periodEnd < periodBegin) {
+    throw new Error('Period End must be on or after Period Begin.');
+  }
+  if (Object.values(pay).some((value) => value < 0) || taxes < 0) {
+    throw new Error('Pay and taxes can\'t be negative.');
+  }
+  if (pay.training + pay.driver + pay.insider <= 0) {
+    throw new Error('Enter Training, Driver Pay, or Insider Pay - hours worked are worked out from them.');
+  }
+
+  const earnings = [
+    earningsLine('Training', pay.training, MINIMUM_WAGE),
+    earningsLine('Regular', pay.driver, DRIVER_RATE),
+    earningsLine('Regular', pay.insider, MINIMUM_WAGE),
+    earningsLine('Tips Reported', pay.tipsReported, null),
+    earningsLine('Tips paid', pay.tipsPaid, null),
+  ].filter((line) => line.current_amount > 0);
+  const otherDeductions = [
+    { name: 'GPS Data Reimbursement', current_amount: -gps, ytd_amount: null },
+    { name: 'Mileage/Gas Reimbursement', current_amount: -mileage, ytd_amount: null },
+    // Cash tips were already in hand, so the paystub takes them back out.
+    { name: 'Tips Reported', current_amount: pay.tipsReported, ytd_amount: null },
+  ];
+  const grossPay = round2(sumAmounts(earnings));
+
+  return {
+    source: 'manual entry',
+    voucher_date: null,
+    voucher_number: null,
+    period_begin: periodBegin,
+    period_end: periodEnd,
+    gross_pay: grossPay,
+    federal_taxes: taxes,
+    net_pay: round2(grossPay - taxes - sumAmounts(otherDeductions)),
+    earnings,
+    taxes: [],
+    other_deductions: otherDeductions,
+  };
+}
+
+manualForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  try {
+    const stub = stubFromForm(manualForm);
+    const existing = loadedStubs.find(
+      (entry) => entry.stub.period_begin === stub.period_begin && entry.stub.period_end === stub.period_end,
+    );
+    if (existing) {
+      throw new Error(`A paystub for ${stubLabel(stub)} is already loaded.`);
+    }
+    loadedStubs.push({ stub });
+    currentStub = stub;
+    manualForm.reset();
+    statusEl.textContent = `Added the paystub for ${stubLabel(stub)}.`;
+    statusEl.classList.remove('status--error');
+  } catch (error) {
+    statusEl.textContent = error.message;
+    statusEl.classList.add('status--error');
+  }
   render();
 });
